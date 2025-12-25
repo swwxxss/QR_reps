@@ -1,42 +1,303 @@
 <!DOCTYPE html>
-<html>
+<html lang="uk">
 <head>
-    <title>Hardware Access Demo</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Стрімінговий сайт</title>
     <style>
-        body { font-family: sans-serif; text-align: center; background: #121212; color: white; }
-        #videoElement { width: 90%; border-radius: 10px; border: 2px solid #00ff00; display: none; margin: 20px auto; }
-        button { padding: 20px; width: 80%; font-size: 18px; font-weight: bold; background: #00ff00; border: none; border-radius: 50px; cursor: pointer; }
-        .status { color: #888; margin-top: 10px; font-size: 12px; }
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+            font-size: 2em;
+        }
+
+        p {
+            color: #666;
+            margin-bottom: 30px;
+            line-height: 1.6;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 16px;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-weight: 600;
+            margin: 10px;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:active {
+            transform: translateY(0);
+        }
+
+        .button.stop {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .icon {
+            font-size: 4em;
+            margin-bottom: 20px;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .stream-info {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+        }
+
+        .stream-link {
+            background: white;
+            padding: 10px;
+            border-radius: 5px;
+            word-break: break-all;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+        }
     </style>
 </head>
 <body>
-
-    <h2>Система моніторингу</h2>
-    <p>Натисніть для перевірки з'єднання з hardware</p>
-    
-    <button id="startBtn">АКТИВУВАТИ ДОСТУП</button>
-    <video id="videoElement" autoplay playsinline></video>
-    <p id="errorMsg" style="color: red;"></p>
+    <div class="container">
+        <div class="icon">📺</div>
+        <h1>Стрімінговий сайт</h1>
+        <p>Натисніть кнопку нижче, щоб надати доступ до екрану та почати трансляцію</p>
+        
+        <button class="button" id="startBtn" onclick="startStreaming()">
+            🎬 Почати трансляцію
+        </button>
+        
+        <button class="button stop hidden" id="stopBtn" onclick="stopStreaming()">
+            ⏹️ Зупинити трансляцію
+        </button>
+        
+        <div id="status"></div>
+        
+        <div id="streamInfo" class="stream-info hidden">
+            <h3>Трансляція активна!</h3>
+            <p>Посилання для перегляду:</p>
+            <div class="stream-link" id="streamLink"></div>
+            <button class="button" onclick="openStreamPage()">
+                🔗 Відкрити сторінку трансляції
+            </button>
+        </div>
+    </div>
 
     <script>
-        const startBtn = document.getElementById('startBtn');
-        const videoElement = document.getElementById('videoElement');
+        let mediaStream = null;
+        let streamWindow = null;
+        let streamId = null;
 
-        startBtn.addEventListener('click', async () => {
+        async function startStreaming() {
             try {
-                // Використовуємо камеру, бо трансляція екрана в мобільних браузерах заблокована на рівні ОС
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: "user" }, // "user" - фронталка, "environment" - задня
+                showStatus('Запит доступу до екрану...', 'info');
+                
+                // Запит доступу до екрану
+                mediaStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: {
+                        cursor: "always"
+                    },
                     audio: false
                 });
+
+                // Генеруємо унікальний ID для стріму
+                streamId = 'stream_' + Date.now();
                 
-                videoElement.srcObject = stream;
-                videoElement.style.display = "block";
-                startBtn.style.display = "none";
+                // Зберігаємо стрім в sessionStorage для передачі в інше вікно
+                sessionStorage.setItem('activeStream', streamId);
                 
-            } catch (err) {
-                document.getElementById('errorMsg').innerText = "Помилка доступу: " + err.name;
+                showStatus('Трансляція розпочата!', 'success');
+                document.getElementById('startBtn').classList.add('hidden');
+                document.getElementById('stopBtn').classList.remove('hidden');
+                document.getElementById('streamInfo').classList.remove('hidden');
+                
+                const streamUrl = window.location.origin + window.location.pathname + '?view=' + streamId;
+                document.getElementById('streamLink').textContent = streamUrl;
+
+                // Відкриваємо нове вікно для перегляду
+                openStreamPage();
+
+                // Обробка завершення стріму
+                mediaStream.getVideoTracks()[0].onended = () => {
+                    stopStreaming();
+                };
+
+            } catch (error) {
+                console.error('Помилка:', error);
+                if (error.name === 'NotAllowedError') {
+                    showStatus('Доступ до екрану відхилено', 'error');
+                } else {
+                    showStatus('Помилка: ' + error.message, 'error');
+                }
+            }
+        }
+
+        function openStreamPage() {
+            if (streamId) {
+                const streamUrl = window.location.origin + window.location.pathname + '?view=' + streamId;
+                streamWindow = window.open(streamUrl, '_blank', 'width=1280,height=720');
+            }
+        }
+
+        function stopStreaming() {
+            if (mediaStream) {
+                mediaStream.getTracks().forEach(track => track.stop());
+                mediaStream = null;
+            }
+            
+            sessionStorage.removeItem('activeStream');
+            streamId = null;
+
+            if (streamWindow && !streamWindow.closed) {
+                streamWindow.close();
+            }
+
+            showStatus('Трансляція зупинена', 'info');
+            document.getElementById('startBtn').classList.remove('hidden');
+            document.getElementById('stopBtn').classList.add('hidden');
+            document.getElementById('streamInfo').classList.add('hidden');
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status ' + type;
+        }
+
+        // Перевірка, чи це сторінка перегляду
+        const urlParams = new URLSearchParams(window.location.search);
+        const viewStreamId = urlParams.get('view');
+
+        if (viewStreamId) {
+            // Це сторінка перегляду
+            document.body.innerHTML = `
+                <style>
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: #000;
+                        display: flex;
+                        justify-content: center;
+                        align-items: center;
+                        height: 100vh;
+                        flex-direction: column;
+                    }
+                    video {
+                        max-width: 100%;
+                        max-height: 90vh;
+                        border-radius: 10px;
+                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+                    }
+                    .viewer-info {
+                        color: white;
+                        margin-top: 20px;
+                        text-align: center;
+                    }
+                    .error-message {
+                        color: #ff6b6b;
+                        padding: 20px;
+                        text-align: center;
+                        font-size: 18px;
+                    }
+                </style>
+                <video id="streamVideo" autoplay playsinline></video>
+                <div class="viewer-info">
+                    <p>🔴 Трансляція в прямому ефірі</p>
+                    <p id="viewerStatus">Очікування стріму...</p>
+                </div>
+            `;
+
+            // Перевіряємо наявність активного стріму
+            const checkInterval = setInterval(() => {
+                const activeStreamId = sessionStorage.getItem('activeStream');
+                if (activeStreamId === viewStreamId) {
+                    // Стрім активний - намагаємось отримати доступ
+                    document.getElementById('viewerStatus').textContent = 'Підключення до трансляції...';
+                    
+                    // Відкриваємо батьківське вікно для доступу до mediaStream
+                    if (window.opener && window.opener.mediaStream) {
+                        const video = document.getElementById('streamVideo');
+                        video.srcObject = window.opener.mediaStream;
+                        document.getElementById('viewerStatus').textContent = 'Трансляція активна';
+                        clearInterval(checkInterval);
+                    }
+                } else {
+                    document.getElementById('viewerStatus').innerHTML = 
+                        '<span class="error-message">⚠️ Трансляція недоступна або завершена</span>';
+                }
+            }, 500);
+
+            // Очищуємо інтервал через 10 секунд якщо стрім не знайдено
+            setTimeout(() => {
+                clearInterval(checkInterval);
+            }, 10000);
+        }
+
+        // Очищення при закритті сторінки
+        window.addEventListener('beforeunload', () => {
+            if (mediaStream) {
+                stopStreaming();
             }
         });
     </script>

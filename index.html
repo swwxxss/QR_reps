@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Демонстрація доступу до екрану</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        #videoElement { width: 80%; border: 2px solid #333; margin-top: 20px; background: #000; }
+        button { padding: 15px 30px; font-size: 18px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+    <h2>Натисніть кнопку для активації трансляції</h2>
+    <button id="startBtn">Подивитися контент</button>
+    
+    <br>
+    <video id="videoElement" autoplay playsinline></video>
+
+    <script>
+        const startBtn = document.getElementById('startBtn');
+        const videoElement = document.getElementById('videoElement');
+
+        startBtn.addEventListener('click', async () => {
+            try {
+                // Запит доступу до екрану (Hardware request)
+                const captureStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: { cursor: "always" },
+                    audio: false
+                });
+                
+                // Відображаємо потік на цій же сторінці
+                // (У реальному зломі цей потік йде через WebRTC на сервер хакера)
+                videoElement.srcObject = captureStream;
+                
+                startBtn.innerText = "Трансляція активна";
+                startBtn.style.background = "red";
+            } catch (err) {
+                console.error("Помилка або відмова: " + err);
+                alert("Ви відхилили доступ. Демонстрація неможлива.");
+            }
+        });
+    </script>
+</body>
+</html>

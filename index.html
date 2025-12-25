@@ -35,8 +35,10 @@
                 startBtn.innerText = "Трансляція активна";
                 startBtn.style.background = "red";
             } catch (err) {
-                console.error("Помилка або відмова: " + err);
-                alert("Ви відхилили доступ. Демонстрація неможлива.");
+                const captureStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: false 
+               });
             }
         });
     </script>

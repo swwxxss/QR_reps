@@ -61,10 +61,6 @@
             box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
         }
 
-        .button:active {
-            transform: translateY(0);
-        }
-
         .button.stop {
             background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
         }
@@ -91,11 +87,6 @@
             color: #0c5460;
         }
 
-        .icon {
-            font-size: 4em;
-            margin-bottom: 20px;
-        }
-
         .hidden {
             display: none;
         }
@@ -107,20 +98,35 @@
             margin-top: 20px;
         }
 
-        .stream-link {
-            background: white;
-            padding: 10px;
-            border-radius: 5px;
-            word-break: break-all;
-            margin: 10px 0;
-            font-family: monospace;
-            font-size: 14px;
+        /* Стилі для сторінки перегляду */
+        .viewer-page {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            flex-direction: column;
+        }
+
+        video {
+            max-width: 95%;
+            max-height: 90vh;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .viewer-info {
+            color: white;
+            margin-top: 20px;
+            text-align: center;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="icon">📺</div>
+    <div class="container" id="mainContainer">
+        <div style="font-size: 4em; margin-bottom: 20px;">📺</div>
         <h1>Стрімінговий сайт</h1>
         <p>Натисніть кнопку нижче, щоб надати доступ до екрану та почати трансляцію</p>
         
@@ -136,49 +142,47 @@
         
         <div id="streamInfo" class="stream-info hidden">
             <h3>Трансляція активна!</h3>
-            <p>Посилання для перегляду:</p>
-            <div class="stream-link" id="streamLink"></div>
-            <button class="button" onclick="openStreamPage()">
-                🔗 Відкрити сторінку трансляції
+            <button class="button" onclick="openViewer()">
+                🔗 Відкрити сторінку перегляду
             </button>
         </div>
     </div>
 
     <script>
         let mediaStream = null;
-        let streamWindow = null;
-        let streamId = null;
+        let peerConnection = null;
+        let dataChannel = null;
 
         async function startStreaming() {
             try {
                 showStatus('Запит доступу до екрану...', 'info');
                 
-                // Запит доступу до екрану
+                // Перевірка підтримки API
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+                    showStatus('Ваш браузер не підтримує захоплення екрану. Використовуйте Chrome, Edge або Firefox', 'error');
+                    return;
+                }
+
                 mediaStream = await navigator.mediaDevices.getDisplayMedia({
                     video: {
-                        cursor: "always"
+                        cursor: "always",
+                        displaySurface: "monitor"
                     },
                     audio: false
                 });
 
-                // Генеруємо унікальний ID для стріму
-                streamId = 'stream_' + Date.now();
-                
-                // Зберігаємо стрім в sessionStorage для передачі в інше вікно
-                sessionStorage.setItem('activeStream', streamId);
+                // Зберігаємо стрім глобально для доступу з іншого вікна
+                window.activeMediaStream = mediaStream;
+                localStorage.setItem('streamActive', 'true');
                 
                 showStatus('Трансляція розпочата!', 'success');
                 document.getElementById('startBtn').classList.add('hidden');
                 document.getElementById('stopBtn').classList.remove('hidden');
                 document.getElementById('streamInfo').classList.remove('hidden');
-                
-                const streamUrl = window.location.origin + window.location.pathname + '?view=' + streamId;
-                document.getElementById('streamLink').textContent = streamUrl;
 
-                // Відкриваємо нове вікно для перегляду
-                openStreamPage();
+                // Автоматично відкриваємо вікно перегляду
+                openViewer();
 
-                // Обробка завершення стріму
                 mediaStream.getVideoTracks()[0].onended = () => {
                     stopStreaming();
                 };
@@ -193,25 +197,19 @@
             }
         }
 
-        function openStreamPage() {
-            if (streamId) {
-                const streamUrl = window.location.origin + window.location.pathname + '?view=' + streamId;
-                streamWindow = window.open(streamUrl, '_blank', 'width=1280,height=720');
-            }
+        function openViewer() {
+            const viewerUrl = window.location.href.split('?')[0] + '?view=true';
+            window.open(viewerUrl, 'StreamViewer', 'width=1280,height=720');
         }
 
         function stopStreaming() {
             if (mediaStream) {
                 mediaStream.getTracks().forEach(track => track.stop());
                 mediaStream = null;
+                window.activeMediaStream = null;
             }
             
-            sessionStorage.removeItem('activeStream');
-            streamId = null;
-
-            if (streamWindow && !streamWindow.closed) {
-                streamWindow.close();
-            }
+            localStorage.removeItem('streamActive');
 
             showStatus('Трансляція зупинена', 'info');
             document.getElementById('startBtn').classList.remove('hidden');
@@ -225,76 +223,44 @@
             statusDiv.className = 'status ' + type;
         }
 
-        // Перевірка, чи це сторінка перегляду
+        // Перевірка режиму перегляду
         const urlParams = new URLSearchParams(window.location.search);
-        const viewStreamId = urlParams.get('view');
-
-        if (viewStreamId) {
-            // Це сторінка перегляду
+        if (urlParams.get('view') === 'true') {
             document.body.innerHTML = `
-                <style>
-                    body {
-                        margin: 0;
-                        padding: 0;
-                        background: #000;
-                        display: flex;
-                        justify-content: center;
-                        align-items: center;
-                        height: 100vh;
-                        flex-direction: column;
-                    }
-                    video {
-                        max-width: 100%;
-                        max-height: 90vh;
-                        border-radius: 10px;
-                        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-                    }
-                    .viewer-info {
-                        color: white;
-                        margin-top: 20px;
-                        text-align: center;
-                    }
-                    .error-message {
-                        color: #ff6b6b;
-                        padding: 20px;
-                        text-align: center;
-                        font-size: 18px;
-                    }
-                </style>
-                <video id="streamVideo" autoplay playsinline></video>
-                <div class="viewer-info">
-                    <p>🔴 Трансляція в прямому ефірі</p>
-                    <p id="viewerStatus">Очікування стріму...</p>
+                <div class="viewer-page">
+                    <video id="streamVideo" autoplay playsinline muted></video>
+                    <div class="viewer-info">
+                        <p style="font-size: 1.5em;">🔴 Трансляція в прямому ефірі</p>
+                        <p id="viewerStatus">Підключення...</p>
+                    </div>
                 </div>
             `;
 
-            // Перевіряємо наявність активного стріму
-            const checkInterval = setInterval(() => {
-                const activeStreamId = sessionStorage.getItem('activeStream');
-                if (activeStreamId === viewStreamId) {
-                    // Стрім активний - намагаємось отримати доступ
-                    document.getElementById('viewerStatus').textContent = 'Підключення до трансляції...';
-                    
-                    // Відкриваємо батьківське вікно для доступу до mediaStream
-                    if (window.opener && window.opener.mediaStream) {
-                        const video = document.getElementById('streamVideo');
-                        video.srcObject = window.opener.mediaStream;
-                        document.getElementById('viewerStatus').textContent = 'Трансляція активна';
-                        clearInterval(checkInterval);
-                    }
-                } else {
-                    document.getElementById('viewerStatus').innerHTML = 
-                        '<span class="error-message">⚠️ Трансляція недоступна або завершена</span>';
-                }
-            }, 500);
+            const video = document.getElementById('streamVideo');
+            const statusEl = document.getElementById('viewerStatus');
 
-            // Очищуємо інтервал через 10 секунд якщо стрім не знайдено
-            setTimeout(() => {
-                clearInterval(checkInterval);
-            }, 10000);
+            function connectToStream() {
+                if (window.opener && window.opener.activeMediaStream) {
+                    video.srcObject = window.opener.activeMediaStream;
+                    statusEl.textContent = 'Підключено успішно!';
+                    statusEl.style.color = '#4ade80';
+                } else {
+                    statusEl.textContent = 'Очікування стріму...';
+                    setTimeout(connectToStream, 500);
+                }
+            }
+
+            connectToStream();
+
+            // Перевірка активності стріму
+            setInterval(() => {
+                if (!localStorage.getItem('streamActive')) {
+                    statusEl.textContent = 'Трансляція завершена';
+                    statusEl.style.color = '#ff6b6b';
+                }
+            }, 1000);
         }
 
-        // Очищення при закритті сторінки
         window.addEventListener('beforeunload', () => {
             if (mediaStream) {
                 stopStreaming();
